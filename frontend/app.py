@@ -39,8 +39,12 @@ if uploaded_file:
 
                 for i, item in enumerate(results):
                     with cols[i % 3]:
-                        st.image(item["image"], width=150)
-                        st.write(f"Score: {item['score']:.2f}")
+                        if item.get("image"):
+                          st.image(item["image"], width=150)
+                        else:
+                          st.write("No image")
+                          
+                        st.write(f"Score: {item.get('score', 0):.2f}")
 
         except Exception as e:
             st.error(f"⚠️ Error: {e}")
