@@ -425,7 +425,50 @@ hr {{ border-color:var(--border) !important; margin:16px 0 !important; }}
     border:1px solid var(--border) !important;
     border-radius:var(--radius-sm) !important;
 }}
+[data-testid="stSidebarCollapsedControl"] {{
+    display: block !important;
+    visibility: visible !important;
+}}
+[data-testid="stSidebarCollapsedControl"] {{
+    opacity: 1 !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    position: fixed !important;
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+    z-index: 9999 !important;
+    background: {T['surface']} !important;
+    border: 1px solid {T['border']} !important;
+    border-radius: 8px !important;
+}}
+[data-testid="stSidebarCollapsedControl"] {{
+    opacity: 1 !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    position: fixed !important;
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+    z-index: 9999 !important;
+    background: {T['surface']} !important;
+    border: 1px solid {T['border']} !important;
+    border-radius: 8px !important;
+}}
+[data-testid="stSidebarCollapseButton"] {{
+    display: none !important;
+}}
+[data-testid="stSidebarCollapseButton"] {{
+    display: none !important;
+}}
 </style>
+""", unsafe_allow_html=True)
+st.markdown("""
+<script>
+const observer = new MutationObserver(() => {
+    const btn = document.querySelector('[data-testid="stSidebarCollapsedControl"]');
+    if (btn) { btn.style.display = 'block'; btn.style.visibility = 'visible'; }
+});
+observer.observe(document.body, { childList: true, subtree: true });
+</script>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="grad-bg"></div>', unsafe_allow_html=True)
@@ -472,7 +515,7 @@ def run_search(image_bytes, filename, category, top_k, threshold):
                       data=data, timeout=REQUEST_TIMEOUT)
     if r.status_code != 200:
         return []
-    return [x for x in r.json() if x["score"] * 100 >= threshold]
+    return [x for x in r.json().get("results", []) if x["score"] * 100 >= threshold]
 
 def fetch_prices(image_url: str, category: str = "") -> list[dict]:
     cache_key = image_url
@@ -541,128 +584,80 @@ def render_price_panel(item, card_key):
     max_price     = prices_sorted[-1].get("price", 0)
     currency      = prices_sorted[0].get("currency", "INR")
 
-    rows_html = ""
+    st.markdown(f"**💰 Price Comparison** — {len(prices)} platforms")
+    st.divider()
+
     for i, p in enumerate(prices_sorted):
         plat    = p.get("platform", "other").lower()
         pc      = PLATFORM_COLORS.get(plat, PLATFORM_COLORS["other"])
         price   = p.get("price", 0)
         mrp     = p.get("mrp")
         url     = p.get("url", "#")
-        name    = p.get("name", "")
-        name    = name[:40] + ("…" if len(name) > 40 else "")
+        name    = p.get("name", "")[:40]
         disc    = discount_pct(price, mrp)
         is_best = (i == 0)
-        row_cls = "price-row best-deal" if is_best else "price-row"
-        rating  = p.get("rating")
 
-        badge_html  = '<span class="deal-badge">BEST</span>' if is_best else ""
-        disc_html   = f'<span class="savings-badge">-{disc}%</span>' if disc else ""
-        rating_html = f'<span style="font-size:.65rem;color:#fbbf24;">★ {rating}</span>' if rating else ""
+        col1, col2, col3 = st.columns([1.2, 1, 0.8])
+        with col1:
+            label_parts = [f"{pc['icon']} {plat.title()}"]
+            if is_best: label_parts.append("⭐ BEST")
+            if disc:    label_parts.append(f"-{disc}%")
+            st.markdown(f"**{'  '.join(label_parts)}**")
+            st.caption(name)
+        with col2:
+            st.markdown(f"### ₹{price:,.0f}")
+            if mrp and mrp > price:
+                st.caption(f"MRP ₹{mrp:,.0f}")
+        with col3:
+            st.link_button("Buy →", url, use_container_width=True)
 
-        rows_html += f"""
-        <div class="{row_cls}">
-          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
-            <span class="plat-badge" style="background:{pc['bg']};color:{pc['text']}">
-              {pc['icon']} {plat.title()}
-            </span>
-            <div style="min-width:0;">
-              <div style="font-size:.7rem;color:var(--muted);white-space:nowrap;
-                          overflow:hidden;text-overflow:ellipsis;max-width:160px;">{name}</div>
-              <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
-                {rating_html}
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-            {badge_html}{disc_html}
-            <span class="price-amount">{format_price(price, currency)}</span>
-            <a class="price-link" href="{url}" target="_blank">Buy →</a>
-          </div>
-        </div>"""
+        st.divider()
 
-    savings_html = ""
     if max_price > min_price:
         savings = max_price - min_price
-        savings_html = f"""
-        <div class="price-summary">
-          <span class="best-text">Best price:</span>
-          <span class="best-val">{format_price(min_price, currency)}</span>
-          <span class="price-range-chip">Save up to {format_price(savings, currency)}</span>
-        </div>"""
-
-    st.markdown(f"""
-    <div class="price-panel">
-      <div class="price-panel-hdr">💰 Price Comparison
-        <span style="margin-left:auto;font-size:.65rem;font-weight:400;">{len(prices)} platforms</span>
-      </div>
-      {rows_html}
-      {savings_html}
-    </div>""", unsafe_allow_html=True)
+        st.success(f"💡 Best price: ₹{min_price:,.0f} — save up to ₹{savings:,.0f}")
 
     if st.button("✕ Hide prices", key=f"hide_{card_key}"):
         st.session_state.expanded_card = None
         st.rerun()
-
 # ══════════════════════════════════════════════════════════════════════════════
 # MODAL
 # ══════════════════════════════════════════════════════════════════════════════
 def render_modal(item):
-    pct   = item["score"] * 100
+    pct = item["score"] * 100
     label, lcls, color = match_info(pct)
-    cat   = item.get("category", "other").lower()
-    icon  = CAT_ICONS.get(cat, "🏷️")
-    cc    = cat_cls(cat)
+    cat = item.get("category", "other").lower()
+    icon = CAT_ICONS.get(cat, "🏷️")
+    cc = cat_cls(cat)
 
-    prices    = st.session_state.price_cache.get(item["image"], [])
-    best_html = ""
-    if prices:
-        best = min(prices, key=lambda x: x.get("price", 9e9))
-        plat = best.get("platform", "")
-        pc   = PLATFORM_COLORS.get(plat.lower(), PLATFORM_COLORS["other"])
-        best_html = f"""
-        <div style="margin-bottom:14px;">
-          <div class="modal-section-hdr">💰 Best Price Found</div>
-          <div style="display:flex;align-items:center;gap:10px;
-                      background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);
-                      border-radius:10px;padding:12px 14px;">
-            <span class="plat-badge" style="background:{pc['bg']};color:{pc['text']}">
-              {pc['icon']} {plat.title()}
-            </span>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:1.3rem;
-                         font-weight:700;color:#22c55e;">
-              {format_price(best.get('price', 0), best.get('currency','INR'))}
-            </span>
-            <a href="{best.get('url','#')}" target="_blank" class="price-link" style="margin-left:auto;">
-              Buy now →
-            </a>
-          </div>
-        </div>"""
+    with st.container(border=True):
+        col_img, col_info = st.columns([1, 1.4])
+        with col_img:
+            try:
+                r = requests.get(item["image"], timeout=5)
+                img = Image.open(io.BytesIO(r.content))
+                st.image(img, use_container_width=True)
+            except Exception:
+                st.warning("Could not load image.")
 
-    st.markdown(f"""
-    <div class="modal-backdrop">
-      <div class="modal-box">
-        <img class="modal-img" src="{item['image']}"
-             onerror="this.style.display='none'"/>
-        <div class="modal-body">
-          <div><span class="cat-badge {cc}">{icon} {cat.upper()}</span></div>
-          <div class="modal-score-row">
-            <span class="modal-score-big">{pct:.0f}%</span>
-            <div class="modal-bar-bg">
-              <div class="modal-bar-fill" style="width:{pct:.0f}%;background:{color};"></div>
-            </div>
-            <span class="match-lbl {lcls}">{label}</span>
-          </div>
-          {best_html}
-          <a class="modal-link" href="{item['image']}" target="_blank">🔗 Open full image</a>
-        </div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+        with col_info:
+            st.markdown(f'<span class="cat-badge {cc}">{icon} {cat.upper()}</span>', unsafe_allow_html=True)
+            st.markdown(f"### {pct:.0f}% — {label}")
+            st.markdown(f'<div class="modal-bar-bg"><div class="modal-bar-fill" style="width:{pct:.0f}%;background:{color};height:6px;border-radius:99px;"></div></div>', unsafe_allow_html=True)
 
-    if st.button("✕  Close", key="close_modal"):
-        st.session_state.modal_open = False
-        st.session_state.modal_item = None
-        st.rerun()
+            prices = st.session_state.price_cache.get(item["image"], [])
+            if prices:
+                best = min(prices, key=lambda x: x.get("price", 9e9))
+                plat = best.get("platform", "")
+                st.markdown(f"**💰 Best price:** ₹{best.get('price',0):,.0f} on **{plat.title()}**")
+                st.link_button("Buy now →", best.get("url", "#"))
+
+            st.markdown(f"[🔗 Open full image]({item['image']})")
+
+        if st.button("✕  Close", key="close_modal", type="primary", use_container_width=True):
+            st.session_state.modal_open = False
+            st.session_state.modal_item = None
+            st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # COMPARE SLIDER
@@ -857,7 +852,6 @@ def render_results(results, sort_by, query_bytes=None):
 # Modal overlay (renders above everything)
 if st.session_state.modal_open and st.session_state.modal_item:
     render_modal(st.session_state.modal_item)
-
 st.markdown('<div class="vs-hero">', unsafe_allow_html=True)
 st.markdown('<h1 class="vs-title">Visual Search</h1>', unsafe_allow_html=True)
 st.markdown(

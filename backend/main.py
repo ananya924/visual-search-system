@@ -293,7 +293,7 @@ async def search(
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     results = get_results(image_bytes, category=category, top_k=top_k)
-    return JSONResponse(content=results)
+    return JSONResponse(content={"results": results})
 
 
 @app.post("/price_search")
